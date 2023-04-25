@@ -6,6 +6,9 @@ import torch
 import torch.optim as optim
 import torch.nn.functional as F
 import time
+from tqdm import tqdm
+import wandb
+
 
 class AverageMeter:
     def __init__(self, *keys):
@@ -41,7 +44,7 @@ def validate(model,data_loader):
     model.eval()
     test_meter=AverageMeter()
     with torch.no_grad():
-        for data in data_loader:
+        for data in tqdm(data_loader):
             img,label=data
             output=model(img)
             loss=F.multilabel_soft_margin_loss(output,label)
@@ -54,12 +57,14 @@ def validate(model,data_loader):
 def train_model():
     model = DenseNet()
     transform_train = transforms.Compose([
-        transforms.Resize((224,224)),
+        transforms.Resize(256),
+        transforms.CenterCrop(224),
         transforms.ToTensor(),
         transforms.Normalize((0.5055902), (0.23193231))
     ])
     transform_test = transforms.Compose([
-        transforms.Resize((224,224)),
+        transforms.Resize(256),
+        transforms.CenterCrop(224),
         transforms.ToTensor(),
         transforms.Normalize((0.4722708), (0.22180891))
     ])
@@ -78,7 +83,7 @@ def train_model():
     # optimizer = optim.SGD(model.parameters(), lr=0.001, momentum=0.5)
     optimizer = optim.Adam(model.parameters(), lr=0.001)
     train_meter=AverageMeter()
-    for epoch in range(2):
+    for epoch in tqdm(range(20)):
         print("Epoch "+str(epoch+1)+' :')
         for batch_idx,data in enumerate(train_data_loader):
             img,label=data
@@ -101,6 +106,8 @@ def train_model():
 
 
 if __name__ == '__main__':
+    wandb.init(project='chest-diseases-classification', name=time.strftime('%m%d%H%M%S'))
+    
     train_model()
     # print(torch.cuda.is_available())
     # print(time.strftime("%m/%d-%H:%M:%S",time.gmtime()))
