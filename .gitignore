@@ -2,7 +2,8 @@
 *.pyc
 
 # custom
-dataset/
 util/
 picture/
 __pychche__/
+wandb/
+multilabel/

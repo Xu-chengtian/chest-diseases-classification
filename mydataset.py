@@ -9,9 +9,11 @@ class MyDataset(Dataset):
             line = line.rstrip()
             words = line.split()
             disease = words[1].split(',')
-            disease_arr=np.zeros(15, np.float32)
+            disease_arr=np.zeros(14, np.float32)
             for i in disease:
-                disease_arr[int(i)]=1.0
+                if i == '0':
+                    continue
+                disease_arr[int(i)-1]=1.0
             imgs.append((words[0], disease_arr))
             self.imgs = imgs 
             self.transform = transform

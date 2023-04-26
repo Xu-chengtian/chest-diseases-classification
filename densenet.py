@@ -67,7 +67,7 @@ class DenseNet(nn.Module):
         super(DenseNet, self).__init__()
         # first Conv2d
         self.features = nn.Sequential(OrderedDict([
-            ("conv0", nn.Conv2d(1, num_init_features, kernel_size=7, stride=2, padding=3, bias=False)),
+            ("conv0", nn.Conv2d(3, num_init_features, kernel_size=7, stride=2, padding=3, bias=False)),
             ("norm0", nn.BatchNorm2d(num_init_features)),
             ("relu0", nn.ReLU(inplace=True)),
             ("pool0", nn.MaxPool2d(3, stride=2, padding=1))
@@ -90,7 +90,7 @@ class DenseNet(nn.Module):
 
         # classification layer
         # self.classifier = nn.Linear(num_features, num_classes)
-        self.classifier = nn.Conv2d(1024,15,1,bias=False)
+        self.classifier = nn.Conv2d(1024,14,1,bias=False)
 
         # params initialization
         for m in self.modules():
@@ -107,7 +107,7 @@ class DenseNet(nn.Module):
         # out = F.avg_pool2d(features, 7, stride=1).view(features.size(0), -1)
         out = F.avg_pool2d(features, 7, stride=1)
         out = self.classifier(out)
-        out = out.view(-1,15)
+        out = out.view(-1,14)
         return out
     
     def trainable_parameters(self):

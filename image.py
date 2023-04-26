@@ -3,9 +3,10 @@ import torch
 from mydataset import MyDataset
 from torch.utils.data import DataLoader
 from torchvision import transforms
+import os
 
 def pic_inf():
-    img = Image.open('/Users/xuchengtian/code/chest-diseases-classification/dataset/images_001/images/00000001_000.png').convert('L')
+    img = Image.open(os.path.join(os.getcwd(),'dataset','images_001','images','00000001_000.png')).convert('L')
     print(img.getbands())
     print(img.split())
     max=0
@@ -43,11 +44,13 @@ def cal_mean_variance(data):
     print(list(mean.numpy()), list(std.numpy()))
 
 if __name__ == '__main__':
+    # pic_inf()
     transform = transforms.Compose([
     transforms.ToTensor(),
 ])
-    train_dataset = MyDataset("/Users/xuchengtian/code/chest-diseases-classification/dataset/train.txt",transform=transform)
-    test_dataset = MyDataset("/Users/xuchengtian/code/chest-diseases-classification/dataset/test.txt",transform=transform)
+    
+    train_dataset = MyDataset(os.path.join(os.getcwd(),'dataset','train.txt'),transform=transform)
+    test_dataset = MyDataset(os.path.join(os.getcwd(),'dataset','test.txt'),transform=transform)
     print('Compute mean and variance for training data.')
     cal_mean_variance(train_dataset)
     print('Compute mean and variance for test data.')

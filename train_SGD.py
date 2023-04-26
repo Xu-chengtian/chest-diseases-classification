@@ -146,8 +146,8 @@ def train_model(project_name):
     model.train()
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     model.to(device)
-    # optimizer = optim.SGD(model.parameters(), lr=0.001, momentum=0.5)
-    optimizer = optim.Adam(model.parameters(), lr=0.001)
+    optimizer = optim.SGD(model.parameters(), lr=0.001, momentum=0.5)
+    # optimizer = optim.Adam(model.parameters(), lr=0.001)
     train_meter=AverageMeter()
     for epoch in range(20):
         print("Epoch "+str(epoch+1)+' :')
@@ -180,7 +180,6 @@ def train_model(project_name):
         state = {'net':model.state_dict(), 'optimizer':optimizer.state_dict(), 'epoch':epoch}
         torch.save(state,os.path.join(os.getcwd(),'models',project_name,time.strftime("%d-%H-%M-%S",time.localtime())+'-epoch'+str(epoch+1)+'.pth'))
         torch.cuda.empty_cache()
-
         print('successfully save model')
     
     full_train_log.to_csv(os.path.join(os.getcwd(),'log',project_name,'train_log.csv'), index=False)
