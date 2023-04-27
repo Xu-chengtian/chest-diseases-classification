@@ -118,7 +118,7 @@ def validate(model,data_loader,device,batch_size,epoch,logger):
 
 def train_model(pre_time,train_path,test_path,batch_size,epoch_num,change_opt,out_fre,logger):
 
-    project_name = pre_time+' SGD'+str(change_opt)
+    project_name = pre_time+'batch '+str(batch_size)+'epoch '+str(epoch_num)+' SGD'+str(change_opt)
     wandb.init(project='chest-diseases-classification', name=project_name)
     os.makedirs(os.path.join(os.getcwd(),'models',project_name))
     os.makedirs(os.path.join(os.getcwd(),'log',project_name))
@@ -159,12 +159,14 @@ def train_model(pre_time,train_path,test_path,batch_size,epoch_num,change_opt,ou
     model.to(device)
     # optimizer = optim.SGD(model.parameters(), lr=0.001, momentum=0.5)
     optimizer = optim.Adam(model.parameters(), lr=0.001)
+    scheduler = optim.lr_scheduler.StepLR(optimizer=optimizer, step_size=5, gamma=0.5)
     logger.info('using init optimizer: Adam')
     train_meter=AverageMeter()
     for epoch in range(epoch_num):
-        if epoch == change_opt:
+        if epoch == change_opt-1:
             optimizer = optim.SGD(model.parameters(), lr=0.001, momentum=0.5)
-            logger.info('change optimizer from Adam to SGD at epoch '+ str(epoch))
+            scheduler = optim.lr_scheduler.StepLR(optimizer=optimizer, step_size=3, gamma=0.5)
+            logger.info('change optimizer from Adam to SGD at epoch '+ str(epoch+1))
         logger.info("Epoch "+str(epoch+1)+' :')
         for batch_idx,data in enumerate(train_data_loader):
             img,label=data
@@ -181,12 +183,15 @@ def train_model(pre_time,train_path,test_path,batch_size,epoch_num,change_opt,ou
                 logger.info('batch count: %d loss:%.4f' % (batch_idx+1, train_meter.pop('loss')))
 
             log_train={}
+            log_train['learning_rate']=optimizer.state_dict()['param_groups'][0]['lr']
             log_train['epoch']=epoch+1
             log_train['batch']=batch_idx+1
             log_train['train_loss']=loss.item()
 
             full_train_log = full_train_log.append(log_train, ignore_index=True)
             wandb.log(log_train)
+        
+        scheduler.step()
 
         log_test = validate(model,test_data_loader, device, batch_size, epoch, logger)
         full_test_log = full_test_log.append(log_test, ignore_index=True)
@@ -234,6 +239,8 @@ if __name__ == '__main__':
                         default='test.txt', help="setting test txt path")
     parser.add_argument('-c','--change_opt',type=int,
                         default=0,help='set the epoch num where optimizer will change into SGD')
+    parser.add_argument('-s','--step',type=int,
+                        default=2,help='set the step of optimizer changing')
     parser.add_argument('-r','--repeat',type=int,
                         default=1,help='train the model several time with different/same method')
     parser.add_argument('-l','--logger',type=int,
@@ -241,12 +248,12 @@ if __name__ == '__main__':
     # 解析命令行参数并打印
     args = parser.parse_args()
     logger.info(args)
-    if args.change_opt+args.repeat > args.epoch:
-        raise Exception('change opt num out of range')
+    if args.change_opt+(args.repeat-1)*args.step > args.epoch:
+        logger.info('change opt num will out of range')
     if args.repeat>1:
         for i in range(args.repeat):
             pre_time=time.strftime('%m%d%H%M%S')
-            change_opt=args.change_opt+i
+            change_opt=args.change_opt+i*args.step
             train_model(pre_time,args.train_path,args.test_path,args.batch,args.epoch,change_opt,args.logger,logger)
     else:
         pre_time=time.strftime('%m%d%H%M%S')
