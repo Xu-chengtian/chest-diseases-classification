@@ -6,11 +6,12 @@ import torch
 import torch.optim as optim
 import torch.nn.functional as F
 import time
-from tqdm import tqdm
 import wandb
 import os
 import pandas as pd
 import warnings
+import argparse
+import logging
 from sklearn.metrics import accuracy_score
 from sklearn.metrics import zero_one_loss
 from sklearn.metrics import precision_score
@@ -47,8 +48,8 @@ class AverageMeter:
             self.__data[key] = [0.0, 0]
             return v
 
-def validate(model,data_loader,device,batch_size,epoch):
-    print('Validating model...',flush=True)
+def validate(model,data_loader,device,batch_size,epoch,logger):
+    logger.info('***Validating model***')
     model.eval()
     test_meter=AverageMeter()
     with torch.no_grad():
@@ -115,7 +116,13 @@ def validate(model,data_loader,device,batch_size,epoch):
     # print('loss %.4f' % (loss))
     return log_test
 
-def train_model(project_name):
+def train_model(pre_time,train_path,test_path,batch_size,epoch_num,change_opt,out_fre,logger):
+
+    project_name = pre_time+' SGD'+str(change_opt)
+    wandb.init(project='chest-diseases-classification', name=project_name)
+    os.makedirs(os.path.join(os.getcwd(),'models',project_name))
+    os.makedirs(os.path.join(os.getcwd(),'log',project_name))
+
     model = DenseNet()
     transform_train = transforms.Compose([
         transforms.Grayscale(num_output_channels=3),
@@ -132,10 +139,10 @@ def train_model(project_name):
         transforms.ToTensor(),
         transforms.Normalize((0.4722708), (0.22180891))
     ])
-    batch_size = 64
-    train_dataset = MyDataset(os.path.join(os.getcwd(),'dataset','train.txt'),transform=transform_train)
+
+    train_dataset = MyDataset(os.path.join(os.getcwd(),'dataset',train_path),transform=transform_train)
     train_data_loader = DataLoader(train_dataset,shuffle=True,batch_size=batch_size,drop_last=True)
-    test_dataset = MyDataset(os.path.join(os.getcwd(),'dataset','test.txt'),transform=transform_test)
+    test_dataset = MyDataset(os.path.join(os.getcwd(),'dataset',test_path),transform=transform_test)
     test_data_loader = DataLoader(test_dataset,shuffle=True,batch_size=batch_size,drop_last=True)
 
     full_train_log = pd.DataFrame()
@@ -144,13 +151,21 @@ def train_model(project_name):
     # print(img.shape)
     # print(label.dtype)
     model.train()
+    if torch.cuda.is_available():
+        logger.info('cuda is available, using cuda')
+    else:
+        logger.info('cuda is not available, using cpu')
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     model.to(device)
     # optimizer = optim.SGD(model.parameters(), lr=0.001, momentum=0.5)
     optimizer = optim.Adam(model.parameters(), lr=0.001)
+    logger.info('using init optimizer: Adam')
     train_meter=AverageMeter()
-    for epoch in range(20):
-        print("Epoch "+str(epoch+1)+' :')
+    for epoch in range(epoch_num):
+        if epoch == change_opt:
+            optimizer = optim.SGD(model.parameters(), lr=0.001, momentum=0.5)
+            logger.info('change optimizer from Adam to SGD at epoch '+ str(epoch))
+        logger.info("Epoch "+str(epoch+1)+' :')
         for batch_idx,data in enumerate(train_data_loader):
             img,label=data
             img=img.to(device)
@@ -162,8 +177,8 @@ def train_model(project_name):
             train_meter.add({'loss': loss.item()})
             optimizer.step()
 
-            if (batch_idx+1)%50==0:
-                print('batch count: %d loss:%.4f' % (batch_idx+1, train_meter.pop('loss')))
+            if (batch_idx+1)%out_fre==0:
+                logger.info('batch count: %d loss:%.4f' % (batch_idx+1, train_meter.pop('loss')))
 
             log_train={}
             log_train['epoch']=epoch+1
@@ -173,7 +188,7 @@ def train_model(project_name):
             full_train_log = full_train_log.append(log_train, ignore_index=True)
             wandb.log(log_train)
 
-        log_test = validate(model,test_data_loader, device, batch_size, epoch)
+        log_test = validate(model,test_data_loader, device, batch_size, epoch, logger)
         full_test_log = full_test_log.append(log_test, ignore_index=True)
         wandb.log(log_test)
 
@@ -181,21 +196,62 @@ def train_model(project_name):
         torch.save(state,os.path.join(os.getcwd(),'models',project_name,time.strftime("%d-%H-%M-%S",time.localtime())+'-epoch'+str(epoch+1)+'.pth'))
         torch.cuda.empty_cache()
 
-        print('successfully save model')
+        logger.info('successfully save model')
     
     full_train_log.to_csv(os.path.join(os.getcwd(),'log',project_name,'train_log.csv'), index=False)
     full_test_log.to_csv(os.path.join(os.getcwd(),'log',project_name,'test_log.csv'), index=False)
+    wandb.finish()
 
 
 
 if __name__ == '__main__':
     warnings.filterwarnings('ignore')
-    project_name=time.strftime('%m%d%H%M%S')
-    wandb.init(project='chest-diseases-classification', name=project_name)
-    os.makedirs(os.path.join(os.getcwd(),'models',project_name))
-    os.makedirs(os.path.join(os.getcwd(),'log',project_name))
-    train_model(project_name)
 
+    if not os.path.exists(os.path.join(os.getcwd(),'log','log_output')):
+        os.makedirs(os.path.join(os.getcwd(),'log','log_output'))
+    logger = logging.getLogger(__name__)
+    logger.setLevel(level = logging.INFO)
+    handler = logging.FileHandler(os.path.join(os.getcwd(),'log','log_output','log'+time.strftime('%m%d%H%M%S')+'.txt'))
+    handler.setLevel(logging.INFO)
+    formatter = logging.Formatter('%(asctime)s - %(name)s - %(message)s')
+    handler.setFormatter(formatter)
+    console = logging.StreamHandler()
+    console.setLevel(logging.INFO)
+    console.setFormatter(formatter)
+    logger.addHandler(handler)
+    logger.addHandler(console)
+    logger.info('Start')
+
+    parser = argparse.ArgumentParser(
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser.add_argument('-b', '--batch', type=int,
+                        default=64, help='setting batch size')
+    parser.add_argument('-e', '--epoch', type=int,
+                        default=20, help='setting train epoch')
+    parser.add_argument("--train_path", type=str,
+                        default='train.txt', help="setting train txt path")
+    parser.add_argument("--test_path", type=str,
+                        default='test.txt', help="setting test txt path")
+    parser.add_argument('-c','--change_opt',type=int,
+                        default=0,help='set the epoch num where optimizer will change into SGD')
+    parser.add_argument('-r','--repeat',type=int,
+                        default=1,help='train the model several time with different/same method')
+    parser.add_argument('-l','--logger',type=int,
+                        default=50,help='setting the logger frequence in training output')
+    # 解析命令行参数并打印
+    args = parser.parse_args()
+    logger.info(args)
+    if args.change_opt+args.repeat > args.epoch:
+        raise Exception('change opt num out of range')
+    if args.repeat>1:
+        for i in range(args.repeat):
+            pre_time=time.strftime('%m%d%H%M%S')
+            change_opt=args.change_opt+i
+            train_model(pre_time,args.train_path,args.test_path,args.batch,args.epoch,change_opt,args.logger,logger)
+    else:
+        pre_time=time.strftime('%m%d%H%M%S')
+        train_model(pre_time,args.train_path,args.test_path,args.batch,args.epoch,args.change_opt,args.logger,logger)
+    logger.info('Finish')
     # print(torch.cuda.is_available())
     # print(time.strftime("%m/%d-%H:%M:%S",time.gmtime()))
 
