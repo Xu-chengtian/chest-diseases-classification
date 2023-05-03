@@ -123,7 +123,7 @@ def validate(model,data_loader,device,batch_size,epoch,logger):
 
 def train_model(pre_time,train_path,test_path,batch_size,epoch_num,change_opt,out_fre,logger,model_path):
 
-    project_name = pre_time+'batch '+str(batch_size)+'epoch '+str(epoch_num)+' SGD'+str(change_opt)
+    project_name = pre_time+' batch '+str(batch_size)+' epoch '+str(epoch_num)+' SGD '+str(change_opt)
     wandb.init(project='chest-diseases-classification', name=project_name)
     wandb.config = {"time": pre_time, "batch_size": batch_size, "epochs": epoch_num,
                     "change SGD epoch": change_opt, "log frequency": out_fre}
