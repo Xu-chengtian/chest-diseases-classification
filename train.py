@@ -19,6 +19,10 @@ from sklearn.metrics import recall_score
 from sklearn.metrics import f1_score
 from sklearn.metrics import hamming_loss
 
+diseases={1: 'Atelectasis', 2: 'Cardiomegaly', 3: 'Effusion', 4: 'Infiltration', 5: 'Mass', 
+         6: 'Nodule', 7: 'Pneumonia', 8: 'Pneumothorax', 9: 'Consolidation', 10: 'Edema', 
+         11: 'Emphysema', 12: 'Fibrosis', 13: 'Pleural_Thickening', 14: 'Hernia', 0: 'No Finding'}
+
 class AverageMeter:
     def __init__(self, *keys):
         self.__data = dict()
@@ -72,6 +76,14 @@ def validate(model,data_loader,device,batch_size,epoch,logger):
             # test_recall = torch.sum(TP/TPFN)/batch_size
             # test_F1_score = 2*test_precision*test_recall/(test_precision+test_recall)
 
+            disease = (torch.sum(T,dim=0)/batch_size).tolist()
+            for idx in range(14):
+                test_meter.add({diseases[idx+1]:disease[idx]})
+            att_ans = torch.where(output>0,1,0)
+            att = torch.ge(att_ans,label)
+            disease = torch.sum(torch.where(torch.sum(att,dim=1)==14,1,0))/batch_size
+            test_meter.add({'attention_disease':disease})
+
             loss=F.multilabel_soft_margin_loss(output,label)
             # test_meter.add({'test_accuracy': test_accuracy})
             # test_meter.add({'all_accurate': all_accurate})
@@ -89,37 +101,33 @@ def validate(model,data_loader,device,batch_size,epoch,logger):
             test_meter.add({'test_F1_score': f1_score(label,ans,average='samples')})
             test_meter.add({'test_hamming_loss': hamming_loss(label,ans)})
 
-
     model.train()
-    test_accuracy=test_meter.pop('test_accuracy')
-    # all_accurate=test_meter.pop('all_accurate')
-    test_label_accuracy=test_meter.pop('test_label_accuracy')
-    test_loss=test_meter.pop('test_loss')
-    test_01_loss=test_meter.pop('test_0-1_loss')
-    test_hamming_loss=test_meter.pop('test_hamming_loss')
-    test_precision=test_meter.pop('test_precision')
-    test_recall=test_meter.pop('test_recall')
-    test_F1_score=test_meter.pop('test_F1_score')
 
     log_test={}
     log_test['epoch']=epoch+1
-    log_test['test_loss']=test_loss
-    log_test['test_accuracy']=test_accuracy
-    log_test['test_label_accuracy']=test_label_accuracy
-    # log_test['all_accurate']=all_accurate
-    log_test['test_01_loss']=test_01_loss
-    log_test['test_precision']=test_precision
-    log_test['test_recall']=test_recall
-    log_test['test_F1_score']=test_F1_score
-    log_test['test_hamming_loss']=test_hamming_loss
+    log_test['test_loss']=test_meter.pop('test_loss')
+    log_test['test_accuracy']=test_meter.pop('test_accuracy')
+    log_test['test_label_accuracy']=test_meter.pop('test_label_accuracy')
+    # log_test['all_accurate']=test_meter.pop('all_accurate')
+    log_test['test_01_loss']=test_meter.pop('test_0-1_loss')
+    log_test['test_precision']=test_meter.pop('test_precision')
+    log_test['test_recall']=test_meter.pop('test_recall')
+    log_test['test_F1_score']=test_meter.pop('test_F1_score')
+    log_test['test_hamming_loss']=test_meter.pop('test_hamming_loss')
+    for idx in range(14):
+        log_test[diseases[idx+1]]=test_meter.pop(diseases[idx+1])
+    log_test['attention_disease']=test_meter.pop('attention_disease')
 
     # print('loss %.4f' % (loss))
     return log_test
 
-def train_model(pre_time,train_path,test_path,batch_size,epoch_num,change_opt,out_fre,logger):
+def train_model(pre_time,train_path,test_path,batch_size,epoch_num,change_opt,out_fre,logger,model_path):
 
     project_name = pre_time+'batch '+str(batch_size)+'epoch '+str(epoch_num)+' SGD'+str(change_opt)
     wandb.init(project='chest-diseases-classification', name=project_name)
+    wandb.config = {"time": pre_time, "batch_size": batch_size, "epochs": epoch_num,
+                    "change SGD epoch": change_opt, "log frequency": out_fre}
+    wandb.config.update()
     os.makedirs(os.path.join(os.getcwd(),'models',project_name))
     os.makedirs(os.path.join(os.getcwd(),'log',project_name))
 
@@ -156,15 +164,23 @@ def train_model(pre_time,train_path,test_path,batch_size,epoch_num,change_opt,ou
     else:
         logger.info('cuda is not available, using cpu')
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    model.to(device)
-    # optimizer = optim.SGD(model.parameters(), lr=0.001, momentum=0.5)
+    start_epoch=0
     optimizer = optim.Adam(model.parameters(), lr=0.001)
     scheduler = optim.lr_scheduler.StepLR(optimizer=optimizer, step_size=5, gamma=0.5)
+
+    if model_path!=None:
+        pretrained = torch.load(model_path)
+        model.load_state_dict(pretrained['net'])
+        optimizer.load_state_dict(pretrained['optimizer'])
+        start_epoch = pretrained['epoch'] + 1
+
+    model.to(device)
+    # optimizer = optim.SGD(model.parameters(), lr=0.001, momentum=0.5)
     logger.info('using init optimizer: Adam')
     train_meter=AverageMeter()
-    for epoch in range(epoch_num):
+    for epoch in range(start_epoch,epoch_num):
         if epoch == change_opt-1:
-            optimizer = optim.SGD(model.parameters(), lr=0.001, momentum=0.5)
+            optimizer = optim.SGD(model.parameters(), lr=optimizer.state_dict()['param_groups'][0]['lr'], momentum=0.5)
             scheduler = optim.lr_scheduler.StepLR(optimizer=optimizer, step_size=3, gamma=0.5)
             logger.info('change optimizer from Adam to SGD at epoch '+ str(epoch+1))
         logger.info("Epoch "+str(epoch+1)+' :')
@@ -233,10 +249,6 @@ if __name__ == '__main__':
                         default=64, help='setting batch size')
     parser.add_argument('-e', '--epoch', type=int,
                         default=20, help='setting train epoch')
-    parser.add_argument("--train_path", type=str,
-                        default='train.txt', help="setting train txt path")
-    parser.add_argument("--test_path", type=str,
-                        default='test.txt', help="setting test txt path")
     parser.add_argument('-c','--change_opt',type=int,
                         default=0,help='set the epoch num where optimizer will change into SGD')
     parser.add_argument('-s','--step',type=int,
@@ -245,19 +257,27 @@ if __name__ == '__main__':
                         default=1,help='train the model several time with different/same method')
     parser.add_argument('-l','--logger',type=int,
                         default=50,help='setting the logger frequence in training output')
+    parser.add_argument("--train_path", type=str,
+                        default='train.txt', help="setting train txt path")
+    parser.add_argument("--test_path", type=str,
+                        default='test.txt', help="setting test txt path")
+    parser.add_argument('--model_path',type=str,
+                        default=None,help="setting the model path which you want to continue training")
     # 解析命令行参数并打印
     args = parser.parse_args()
     logger.info(args)
     if args.change_opt+(args.repeat-1)*args.step > args.epoch:
         logger.info('change opt num will out of range')
+    if args.model_path!=None:
+        logger.info('using pretrained model and continue training')
     if args.repeat>1:
         for i in range(args.repeat):
             pre_time=time.strftime('%m%d%H%M%S')
             change_opt=args.change_opt+i*args.step
-            train_model(pre_time,args.train_path,args.test_path,args.batch,args.epoch,change_opt,args.logger,logger)
+            train_model(pre_time,args.train_path,args.test_path,args.batch,args.epoch,change_opt,args.logger,logger,args.model_path)
     else:
         pre_time=time.strftime('%m%d%H%M%S')
-        train_model(pre_time,args.train_path,args.test_path,args.batch,args.epoch,args.change_opt,args.logger,logger)
+        train_model(pre_time,args.train_path,args.test_path,args.batch,args.epoch,args.change_opt,args.logger,logger,args.model_path)
     logger.info('Finish')
     # print(torch.cuda.is_available())
     # print(time.strftime("%m/%d-%H:%M:%S",time.gmtime()))
