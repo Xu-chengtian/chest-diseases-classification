@@ -6,6 +6,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.utils.model_zoo as model_zoo
 import torchvision.transforms as transforms
+import torchinfo
 
 from PIL import Image
 import numpy as np
@@ -122,3 +123,5 @@ class DenseNet(nn.Module):
 # print(y.shape)
 # print(model.trainable_parameters)
 
+# net=DenseNet()
+# torchinfo.summary(net, input_size=(32, 3, 224, 224))
