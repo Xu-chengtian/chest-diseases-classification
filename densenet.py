@@ -11,6 +11,10 @@ import torchinfo
 from PIL import Image
 import numpy as np
 
+# 模型类
+# 基于DenseNet-121修改
+
+# DenseLayer结构
 class _DenseLayer(nn.Sequential):
     """Basic unit of DenseBlock (using bottleneck layer) """
     def __init__(self, num_input_features, growth_rate, bn_size, drop_rate):
@@ -25,12 +29,14 @@ class _DenseLayer(nn.Sequential):
                                            kernel_size=3, stride=1, padding=1, bias=False))
         self.drop_rate = drop_rate
 
+    # 前向传播方法
     def forward(self, x):
         new_features = super(_DenseLayer, self).forward(x)
         if self.drop_rate > 0:
             new_features = F.dropout(new_features, p=self.drop_rate, training=self.training)
         return torch.cat([x, new_features], 1)
 
+# DenseBlock结构
 class _DenseBlock(nn.Sequential):
     """DenseBlock"""
     def __init__(self, num_layers, num_input_features, bn_size, growth_rate, drop_rate):
@@ -40,7 +46,7 @@ class _DenseBlock(nn.Sequential):
                                 drop_rate)
             self.add_module("denselayer%d" % (i+1), layer)
 
-
+# Transition结构
 class _Transition(nn.Sequential):
     """Transition layer between two adjacent DenseBlock"""
     def __init__(self, num_input_feature, num_output_features):
@@ -51,11 +57,12 @@ class _Transition(nn.Sequential):
                                           kernel_size=1, stride=1, bias=False))
         self.add_module("pool", nn.AvgPool2d(2, stride=2))
 
-
+# DenseNet网络主题结构
 class DenseNet(nn.Module):
     "DenseNet-BC model"
+    # 初始化
     def __init__(self, growth_rate=32, block_config=(6, 12, 24, 16), num_init_features=64,
-                 bn_size=4, compression_rate=0.5, drop_rate=0, num_classes=15):
+                 bn_size=4, compression_rate=0.5, drop_rate=0, num_classes=14):
         """
         :param growth_rate: (int) number of filters used in DenseLayer, `k` in the paper
         :param block_config: (list of 4 ints) number of layers in each DenseBlock
@@ -90,6 +97,7 @@ class DenseNet(nn.Module):
         self.features.add_module("relu5", nn.ReLU(inplace=True))
 
         # classification layer
+        # 将全连接层修改为卷积层
         # self.classifier = nn.Linear(num_features, num_classes)
         self.classifier = nn.Conv2d(1024,14,1,bias=False)
 
@@ -103,25 +111,28 @@ class DenseNet(nn.Module):
             elif isinstance(m, nn.Linear):
                 nn.init.constant_(m.bias, 0)
 
+    # 前向传播方法
     def forward(self, x):
         features = self.features(x)
         # out = F.avg_pool2d(features, 7, stride=1).view(features.size(0), -1)
         out = F.avg_pool2d(features, 7, stride=1)
         out = self.classifier(out)
-        out = out.view(-1,14)
+        out = out.view(-1, 14)
         return out
     
-    def trainable_parameters(self):
-        return (list(self.features.parameters()),list(self.classifier.parameters()))
+    # 返回网络参数给自定义优化器
+    # def trainable_parameters(self):
+    #     return (list(self.features.parameters()),list(self.classifier.parameters()))
 
+# 测试网络结构是否正确
 
-
-# model=DenseNet()
-# print(model)
-# x=torch.randn(1,1,224,224)
-# y=model(x)
-# print(y.shape)
+model=DenseNet()
+print(model)
+x=torch.randn(1,1,224,224)
+y=model(x)
+print(y.shape)
 # print(model.trainable_parameters)
 
-# net=DenseNet()
-# torchinfo.summary(net, input_size=(32, 3, 224, 224))
+# 打印网络参数量
+
+torchinfo.summary(net, input_size=(32, 3, 224, 224))

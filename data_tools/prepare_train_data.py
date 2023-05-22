@@ -2,6 +2,12 @@ import csv
 import os
 
 # 数据集生成文件
+# 训练前必须使用本程序
+# 利用util文件中的分类txt，结合图像标签csv文件，生成测试集和训练集文件共后续使用
+# 生成文件存放在dataset目录下
+# 训练前查看数据集是否完整，不然会报错
+
+
 cur_path = os.getcwd()
 csv_path = os.path.join(cur_path,'util','Data_Entry_2017.csv')
 

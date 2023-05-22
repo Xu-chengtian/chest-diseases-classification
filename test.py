@@ -10,7 +10,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('-p', '--picture', type=str,
-                        default='/Users/xuchengtian/code/chest-diseases-classification/dataset/images_006/images',
+                        default='/Users/xuchengtian/code/chest-diseases-classification/dataset/images_005/images',
                         help='choose test picture')
     parser.add_argument('-m','--model',type=str,
                         default='/Users/xuchengtian/code/chest-diseases-classification/models/0427115128/27-11-53-02-epoch1.pth',
@@ -53,4 +53,3 @@ if __name__ == '__main__':
         if 1 in ans:
             print(ans)
             print(picture_path)
-            break
