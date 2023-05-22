@@ -125,14 +125,14 @@ class DenseNet(nn.Module):
     #     return (list(self.features.parameters()),list(self.classifier.parameters()))
 
 # 测试网络结构是否正确
+if __name__ == '__main__':
+    model=DenseNet()
+    print(model)
+    x=torch.randn(1,1,224,224)
+    y=model(x)
+    print(y.shape)
+    # print(model.trainable_parameters)
 
-model=DenseNet()
-print(model)
-x=torch.randn(1,1,224,224)
-y=model(x)
-print(y.shape)
-# print(model.trainable_parameters)
+    # 打印网络参数量
 
-# 打印网络参数量
-
-torchinfo.summary(net, input_size=(32, 3, 224, 224))
+    torchinfo.summary(net, input_size=(32, 3, 224, 224))
