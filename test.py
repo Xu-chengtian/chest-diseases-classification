@@ -13,8 +13,9 @@ if __name__ == '__main__':
                         default='/Users/xuchengtian/code/chest-diseases-classification/dataset/images_005/images',
                         help='choose test picture')
     parser.add_argument('-m','--model',type=str,
-                        default='/Users/xuchengtian/code/chest-diseases-classification/models/0427115128/27-11-53-02-epoch1.pth',
+                        default='/Users/xuchengtian/code/chest-diseases-classification/models/model.pth',
                         help='choose test model')
+    parser.add_argument('-s','--show', action= "store_true",help='test all picture')
     args = parser.parse_args()
     transform_test = transforms.Compose([
         transforms.Grayscale(num_output_channels=3),
@@ -37,19 +38,43 @@ if __name__ == '__main__':
     # print(output)
     # ans = torch.where(output>=0.5,1,0)
     # print(ans)
-    for pic_path in os.listdir(args.picture):
-        picture_path=os.path.join(args.picture,pic_path)
-        test_pic = Image.open(picture_path)
-        # test_pic = np.array(test_pic)
-        test_pic = transform_test(test_pic)
-        test_pic = torch.unsqueeze(test_pic,0)
-
+    if args.show:
         net = DenseNet()
         pretrained = torch.load(args.model, map_location='cpu')
         net.load_state_dict(pretrained['net'])
         net.eval()
-        output = net(test_pic)
-        ans = torch.where(output>=0.5,1,0).tolist()[0]
-        if 1 in ans:
-            print(ans)
-            print(picture_path)
+        files = os.listdir(os.path.join(os.getcwd(),'dataset','diseases'))
+        for file in files:
+            if len(file)<7:
+                continue
+            print(file)
+            pic_file = open(os.path.join(os.getcwd(),'dataset','diseases',file))
+            picture_path = pic_file.readline()[:-1]
+            while(picture_path):
+                picture = Image.open(picture_path)
+                picture = transform_test(picture)
+                picture = torch.unsqueeze(picture,0)
+                output = net(picture)
+                ans = torch.where(output>=0.5,1,0).tolist()[0]
+                if 1 in ans:
+                    print(ans)
+                    print(picture_path)
+
+                picture_path = pic_file.readline()[:-1]
+    else:
+        for pic_path in os.listdir(args.picture):
+            picture_path=os.path.join(args.picture,pic_path)
+            test_pic = Image.open(picture_path)
+            # test_pic = np.array(test_pic)
+            test_pic = transform_test(test_pic)
+            test_pic = torch.unsqueeze(test_pic,0)
+
+            net = DenseNet()
+            pretrained = torch.load(args.model, map_location='cpu')
+            net.load_state_dict(pretrained['net'])
+            net.eval()
+            output = net(test_pic)
+            ans = torch.where(output>=0.5,1,0).tolist()[0]
+            if 1 in ans:
+                print(ans)
+                print(picture_path)
