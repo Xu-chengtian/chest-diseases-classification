@@ -20,7 +20,7 @@ git clone https://github.com/Xu-chengtian/chest-diseases-classification.git
 
 ### 注意:
 
-- wandb 仅可使用pip工具下载安装
+- wandb ,torchinfo仅可使用pip工具下载安装
 - 如果想要使用 GPU 训练，请下载支持 GPU 的Pytorch <i>(推荐)</i>
 - 使用 anaconda 实现虚拟环境生成以及包体管理 <i>(推荐)</i>
 </b>
